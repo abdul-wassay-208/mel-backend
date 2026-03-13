@@ -63,6 +63,11 @@ model Project {
   name              String
   description       String?
   category          String?
+  programLead       String?
+  projectSupport    String?
+  generalCategory   String?
+  specificCategory  String?
+  expectedUsers     Int?
   startDate         DateTime
   endDate           DateTime?
   reportingInterval ReportingInterval
