@@ -11,7 +11,10 @@ const app = express();
 app.use(helmet());
 app.use(
   cors({
-    origin: ["http://localhost:8080"],
+    origin: [
+      "http://localhost:8080",
+      "https://mel-client-gdjq.vercel.app",
+    ],
     credentials: true,
   })
 );
