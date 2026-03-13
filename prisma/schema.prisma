@@ -1,0 +1,181 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  PROJECT_LEAD
+}
+
+enum ProjectStatus {
+  DRAFT
+  ACTIVE
+  COMPLETED
+  ARCHIVED
+}
+
+enum ReportingInterval {
+  MONTHLY
+  QUARTERLY
+  YEARLY
+}
+
+enum ReportStatus {
+  DRAFT
+  SUBMITTED
+  UNDER_REVIEW
+  PUBLISHED
+  COMPLETED
+  EDIT_REQUESTED
+}
+
+enum AuditActionType {
+  CREATE
+  UPDATE
+  DELETE
+  STATUS_CHANGE
+}
+
+model User {
+  id          Int       @id @default(autoincrement())
+  name        String
+  email       String    @unique
+  passwordHash String
+  role        Role
+  isActive    Boolean   @default(true)
+  inviteToken      String?   @unique
+  inviteExpiresAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  projectsLed Project[] @relation("ProjectLead")
+  reports     Report[]
+  auditLogs   AuditLog[]
+}
+
+model Project {
+  id                Int               @id @default(autoincrement())
+  name              String
+  description       String?
+  category          String?
+  startDate         DateTime
+  endDate           DateTime?
+  reportingInterval ReportingInterval
+  status            ProjectStatus     @default(DRAFT)
+  nextDueDate       DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  leadId   Int?
+  lead     User?      @relation("ProjectLead", fields: [leadId], references: [id])
+
+  objectives  Objective[]
+  reports     Report[]
+  disaggregatedData DisaggregatedData[]
+}
+
+model Objective {
+  id          Int       @id @default(autoincrement())
+  title       String
+  description String?
+
+  projectId Int
+  project   Project   @relation(fields: [projectId], references: [id])
+
+  outcomes Outcome[]
+}
+
+model Outcome {
+  id          Int       @id @default(autoincrement())
+  title       String
+  description String?
+
+  objectiveId Int
+  objective   Objective @relation(fields: [objectiveId], references: [id])
+
+  indicators Indicator[]
+}
+
+model Indicator {
+  id          Int       @id @default(autoincrement())
+  name        String
+  description String?
+  unit        String?
+
+  outcomeId Int
+  outcome   Outcome   @relation(fields: [outcomeId], references: [id])
+
+  disaggregatedData DisaggregatedData[]
+}
+
+model Report {
+  id          Int          @id @default(autoincrement())
+  title       String
+  periodStart DateTime
+  periodEnd   DateTime
+  status      ReportStatus @default(DRAFT)
+  submittedAt DateTime?
+  publishedAt DateTime?
+  completedAt DateTime?
+  learningSummary String?
+
+  projectId Int
+  project   Project  @relation(fields: [projectId], references: [id])
+
+  leadId Int
+  lead   User     @relation(fields: [leadId], references: [id])
+
+  disaggregatedData DisaggregatedData[]
+}
+
+model DisaggregatedData {
+  id Int @id @default(autoincrement())
+
+  projectId  Int?
+  project    Project?  @relation(fields: [projectId], references: [id])
+
+  reportId Int?
+  report   Report? @relation(fields: [reportId], references: [id])
+
+  indicatorId Int
+  indicator   Indicator @relation(fields: [indicatorId], references: [id])
+
+  Economy          Int?
+  Infrastructure   Int?
+  Institution      Int?
+  Operator         Int?
+  Gender           String?
+  Age              String?
+  Sector           String?
+  ASN              String?
+  Technology       String?
+  Disability       String?
+  RuralUrban       String?
+  Topic            String?
+  StakeholderType  String?
+  Dialogues        Int?
+  PartnerType      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model AuditLog {
+  id        Int             @id @default(autoincrement())
+  entity    String
+  entityId  Int
+  action    AuditActionType
+  timestamp DateTime        @default(now())
+  oldValues Json?
+  newValues Json?
+
+  userId Int?
+  user   User?    @relation(fields: [userId], references: [id])
+}
+
