@@ -232,7 +232,7 @@ export async function changeReportStatus(req, res, next) {
           sendEmail({
             to: admin.email,
             subject: `Report submitted: ${updated.title}`,
-            text: `Report "${updated.title}" has been submitted by ${existing.lead.name}.`,
+            htmlContent: `<p>Report "<strong>${updated.title}</strong>" has been submitted by ${existing.lead.name}.</p>`,
           })
         )
       );
@@ -240,7 +240,7 @@ export async function changeReportStatus(req, res, next) {
       await sendEmail({
         to: existing.lead.email,
         subject: `Report published: ${updated.title}`,
-        text: `Your report "${updated.title}" has been published.`,
+        htmlContent: `<p>Your report "<strong>${updated.title}</strong>" has been published.</p>`,
       });
     }
 
