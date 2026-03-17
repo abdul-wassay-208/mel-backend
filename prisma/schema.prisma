@@ -153,10 +153,12 @@ model DisaggregatedData {
 
   Economy          Int?
   Infrastructure   Int?
-  Institution      Int?
-  Operator         Int?
+  Institution      String?
+  Operator         String?
   Gender           String?
   Age              String?
+  City             String?
+  Language         String?
   Sector           String?
   ASN              String?
   Technology       String?
@@ -165,10 +167,42 @@ model DisaggregatedData {
   Topic            String?
   StakeholderType  String?
   Dialogues        Int?
+  DialoguesText    String?
   PartnerType      String?
+
+  // Total number of users / beneficiaries represented by this row
+  NumberOfUsers    Int?
+
+  Notes            String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+model EditRequest {
+  id             Int      @id @default(autoincrement())
+
+  // Foreign-key IDs (kept as plain ints to avoid extra relation wiring)
+  projectId      Int
+  reportId       Int
+  indicatorId    Int
+
+  // Meta copied from client for easier querying
+  projectName    String
+  indicatorName  String
+
+  // JSON-encoded array of field keys the lead wants to edit
+  fieldsToEdit   String
+  reason         String
+
+  status         String   @default("PENDING") // PENDING | APPROVED | REJECTED
+
+  requestedById   Int
+  requestedByName String
+  requestedAt     DateTime @default(now())
+
+  resolvedAt     DateTime?
+  resolvedById   Int?
 }
 
 model AuditLog {

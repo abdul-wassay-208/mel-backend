@@ -186,9 +186,6 @@ export async function changeReportStatus(req, res, next) {
       }
       newStatus = "UNDER_REVIEW";
     } else if (action === "PUBLISH") {
-      if (req.user.role !== "ADMIN") {
-        return res.status(403).json({ message: "Only Admin can publish" });
-      }
       const indicatorsComplete = await ensureIndicatorsComplete(id);
       if (!indicatorsComplete) {
         return res.status(400).json({ message: "Cannot publish: indicators/disaggregated data incomplete" });

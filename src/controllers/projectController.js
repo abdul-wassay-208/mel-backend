@@ -29,7 +29,11 @@ export async function listProjects(req, res, next) {
       where,
       include: {
         lead: true,
-        reports: true,
+        reports: {
+          include: {
+            disaggregatedData: true,
+          },
+        },
         objectives: {
           include: {
             outcomes: {
@@ -55,6 +59,11 @@ export async function getProject(req, res, next) {
       where: { id },
       include: {
         lead: true,
+        reports: {
+          include: {
+            disaggregatedData: true,
+          },
+        },
         objectives: {
           include: {
             outcomes: {

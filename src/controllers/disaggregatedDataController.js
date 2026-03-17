@@ -47,7 +47,12 @@ export async function submitDisaggregatedData(req, res, next) {
       Topic,
       StakeholderType,
       Dialogues,
+      DialoguesText,
       PartnerType,
+      NumberOfUsers,
+      Language,
+      City,
+      Notes,
     } = data;
 
     const hasAnyField =
@@ -57,6 +62,8 @@ export async function submitDisaggregatedData(req, res, next) {
       Operator != null ||
       !!Gender ||
       !!Age ||
+      !!Language ||
+      !!City ||
       !!Sector ||
       !!ASN ||
       !!Technology ||
@@ -65,7 +72,10 @@ export async function submitDisaggregatedData(req, res, next) {
       !!Topic ||
       !!StakeholderType ||
       Dialogues != null ||
-      !!PartnerType;
+      !!DialoguesText ||
+      !!PartnerType ||
+      NumberOfUsers != null ||
+      !!Notes;
 
     if (!hasAnyField) {
       return res.status(400).json({ message: "At least one disaggregation field must be provided" });
@@ -82,6 +92,7 @@ export async function submitDisaggregatedData(req, res, next) {
         Operator,
         Gender,
         Age,
+        City,
         Sector,
         ASN,
         Technology,
@@ -90,7 +101,11 @@ export async function submitDisaggregatedData(req, res, next) {
         Topic,
         StakeholderType,
         Dialogues,
+        DialoguesText,
         PartnerType,
+        NumberOfUsers,
+        Language,
+        Notes,
       },
     });
 
