@@ -27,6 +27,7 @@ export async function listProjects(req, res, next) {
 
     const projects = await prisma.project.findMany({
       where,
+      orderBy: { createdAt: "desc" },
       include: {
         lead: true,
         reports: {
