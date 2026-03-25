@@ -30,13 +30,15 @@ export const projectCreateSchema = z.object({
   startDate: z.string().min(1),
   endDate: z.string().optional(),
   reportingInterval: z.enum(["MONTHLY", "QUARTERLY", "YEARLY", "monthly", "quarterly", "yearly"]),
+  // Backward compatible: allow old single leadId OR new multi leadIds
   leadId: z.number().int().optional().nullable(),
+  leadIds: z.array(z.number().int()).min(1).optional(),
   objectives: z.array(objectiveCreateSchema).optional().default([]),
 });
 
 export const projectUpdateSchema = projectCreateSchema.partial();
 
 export const assignLeadSchema = z.object({
-  leadId: z.number().int(),
+  leadIds: z.array(z.number().int()).min(1),
 });
 

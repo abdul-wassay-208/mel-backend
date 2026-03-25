@@ -22,7 +22,10 @@ export async function listProjects(req, res, next) {
   try {
     const where = {};
     if (req.user.role === "PROJECT_LEAD") {
-      where.leadId = req.user.id;
+      where.OR = [
+        { leadId: req.user.id }, // legacy single-lead field
+        { leads: { some: { userId: req.user.id } } }, // new multi-lead assignments
+      ];
     }
 
     const projects = await prisma.project.findMany({
@@ -30,10 +33,12 @@ export async function listProjects(req, res, next) {
       orderBy: { createdAt: "desc" },
       include: {
         lead: true,
+        leads: { include: { user: true } },
         reports: {
           include: {
             disaggregatedData: true,
           },
+          orderBy: { id: "desc" },
         },
         objectives: {
           include: {
@@ -60,10 +65,12 @@ export async function getProject(req, res, next) {
       where: { id },
       include: {
         lead: true,
+        leads: { include: { user: true } },
         reports: {
           include: {
             disaggregatedData: true,
           },
+          orderBy: { id: "desc" },
         },
         objectives: {
           include: {
@@ -80,7 +87,11 @@ export async function getProject(req, res, next) {
       return res.status(404).json({ message: "Project not found" });
     }
 
-    if (req.user.role === "PROJECT_LEAD" && project.leadId !== req.user.id) {
+    if (
+      req.user.role === "PROJECT_LEAD" &&
+      project.leadId !== req.user.id &&
+      !(project.leads || []).some((a) => a.userId === req.user.id)
+    ) {
       return res.status(403).json({ message: "Forbidden" });
     }
 
@@ -110,11 +121,22 @@ export async function createProject(req, res, next) {
     }
     const endDate = parseDateOrNull(data.endDate);
 
-    if (data.leadId != null) {
-      const lead = await prisma.user.findUnique({ where: { id: Number(data.leadId) } });
-      if (!lead || lead.role !== "PROJECT_LEAD") {
-        return res.status(400).json({ message: "Lead must be a valid Project Lead user" });
-      }
+    const leadIdsFromPayload = Array.isArray(data.leadIds) && data.leadIds.length > 0
+      ? data.leadIds.map((x) => Number(x)).filter((x) => Number.isFinite(x))
+      : (data.leadId != null ? [Number(data.leadId)] : []);
+
+    const uniqueLeadIds = Array.from(new Set(leadIdsFromPayload));
+    if (uniqueLeadIds.length === 0) {
+      return res.status(400).json({ message: "At least one Project Lead is required" });
+    }
+
+    const leads = await prisma.user.findMany({
+      where: { id: { in: uniqueLeadIds } },
+      select: { id: true, role: true },
+    });
+    const invalid = leads.find((u) => u.role !== "PROJECT_LEAD");
+    if (leads.length !== uniqueLeadIds.length || invalid) {
+      return res.status(400).json({ message: "All leads must be valid Project Lead users" });
     }
 
     const project = await prisma.project.create({
@@ -130,7 +152,11 @@ export async function createProject(req, res, next) {
         startDate,
         endDate,
         reportingInterval,
-        leadId: data.leadId != null ? Number(data.leadId) : null,
+        // keep legacy leadId for backward compatibility (use first lead)
+        leadId: uniqueLeadIds[0] ?? null,
+        leads: {
+          create: uniqueLeadIds.map((userId) => ({ userId })),
+        },
         objectives: {
           create: (data.objectives ?? []).map((obj) => ({
             title: obj.name,
@@ -152,6 +178,7 @@ export async function createProject(req, res, next) {
       },
       include: {
         lead: true,
+        leads: { include: { user: true } },
         reports: true,
         objectives: {
           include: {
@@ -250,21 +277,36 @@ export async function assignProjectLead(req, res, next) {
     }
 
     const parseResult = assignLeadSchema.safeParse({
-      leadId: Number(req.body.leadId),
+      leadIds: Array.isArray(req.body.leadIds) ? req.body.leadIds.map((x) => Number(x)) : [],
     });
     if (!parseResult.success) {
       return res.status(400).json({ message: "Invalid payload", errors: parseResult.error.flatten() });
     }
 
-    const { leadId } = parseResult.data;
-    const lead = await prisma.user.findUnique({ where: { id: leadId } });
-    if (!lead || lead.role !== "PROJECT_LEAD") {
-      return res.status(400).json({ message: "Lead must be a valid Project Lead user" });
+    const leadIds = Array.from(new Set(parseResult.data.leadIds.map((x) => Number(x)).filter(Number.isFinite)));
+    if (leadIds.length === 0) {
+      return res.status(400).json({ message: "At least one Project Lead is required" });
+    }
+
+    const leads = await prisma.user.findMany({
+      where: { id: { in: leadIds } },
+      select: { id: true, role: true },
+    });
+    const invalid = leads.find((u) => u.role !== "PROJECT_LEAD");
+    if (leads.length !== leadIds.length || invalid) {
+      return res.status(400).json({ message: "All leads must be valid Project Lead users" });
     }
 
     const updated = await prisma.project.update({
       where: { id },
-      data: { leadId },
+      data: {
+        leadId: leadIds[0] ?? null,
+        leads: {
+          deleteMany: {},
+          create: leadIds.map((userId) => ({ userId })),
+        },
+      },
+      include: { lead: true, leads: { include: { user: true } } },
     });
 
     await createAuditLog({
