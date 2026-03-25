@@ -282,3 +282,97 @@ export async function assignProjectLead(req, res, next) {
   }
 }
 
+export async function deleteProject(req, res, next) {
+  try {
+    const id = Number(req.params.id);
+    if (!Number.isFinite(id)) return res.status(400).json({ message: "Invalid project id" });
+
+    const project = await prisma.project.findUnique({
+      where: { id },
+      include: {
+        reports: { select: { id: true, status: true } },
+        objectives: {
+          include: {
+            outcomes: {
+              include: {
+                indicators: { select: { id: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!project) return res.status(404).json({ message: "Project not found" });
+
+    if (req.user.role !== "ADMIN") {
+      return res.status(403).json({ message: "Forbidden" });
+    }
+
+    const objectiveIds = project.objectives.map(o => o.id);
+    const outcomeIds = project.objectives.flatMap(o => o.outcomes.map(out => out.id));
+    const reportIds = project.reports.map(r => r.id);
+    const indicatorIds = project.objectives.flatMap(o =>
+      o.outcomes.flatMap(out => out.indicators.map(i => i.id))
+    );
+
+    await prisma.disaggregatedData.deleteMany({
+      where: { projectId: id },
+    });
+
+    if (reportIds.length > 0) {
+      await prisma.disaggregatedData.deleteMany({
+        where: { reportId: { in: reportIds } },
+      });
+    }
+
+    if (indicatorIds.length > 0) {
+      await prisma.disaggregatedData.deleteMany({
+        where: { indicatorId: { in: indicatorIds } },
+      });
+    }
+
+    if (outcomeIds.length > 0) {
+      await prisma.indicator.deleteMany({
+        where: { outcomeId: { in: outcomeIds } },
+      });
+    }
+
+    if (objectiveIds.length > 0) {
+      await prisma.outcome.deleteMany({
+        where: { objectiveId: { in: objectiveIds } },
+      });
+      await prisma.objective.deleteMany({
+        where: { projectId: id },
+      });
+    }
+
+    if (reportIds.length > 0) {
+      await prisma.report.deleteMany({
+        where: { id: { in: reportIds } },
+      });
+    } else {
+      await prisma.report.deleteMany({
+        where: { projectId: id },
+      });
+    }
+
+    await prisma.project.delete({
+      where: { id },
+    });
+
+    await createAuditLog({
+      userId: req.user.id,
+      entity: "Project",
+      entityId: id,
+      action: "DELETE",
+      oldValues: project,
+      newValues: null,
+    });
+
+    res.status(204).send();
+  } catch (err) {
+    next(err);
+  }
+}
+

@@ -6,6 +6,7 @@ import {
   createProject,
   updateProject,
   assignProjectLead,
+  deleteProject,
 } from "../controllers/projectController.js";
 
 export const router = express.Router();
@@ -17,4 +18,5 @@ router.get("/:id", getProject);
 router.post("/", authorize(["ADMIN"]), createProject);
 router.put("/:id", authorize(["ADMIN"]), updateProject);
 router.post("/:id/assign-lead", authorize(["ADMIN"]), assignProjectLead);
+router.delete("/:id", authorize(["ADMIN"]), deleteProject);
 
