@@ -54,8 +54,23 @@ model User {
   updatedAt   DateTime  @updatedAt
 
   projectsLed Project[] @relation("ProjectLead")
+  projectLeadAssignments ProjectLeadAssignment[]
   reports     Report[]
   auditLogs   AuditLog[]
+}
+
+model ProjectLeadAssignment {
+  id        Int      @id @default(autoincrement())
+  projectId Int
+  userId    Int
+  assignedAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@index([userId])
+  @@index([projectId])
 }
 
 model Project {
@@ -79,6 +94,7 @@ model Project {
 
   leadId   Int?
   lead     User?      @relation("ProjectLead", fields: [leadId], references: [id])
+  leads    ProjectLeadAssignment[]
 
   objectives  Objective[]
   reports     Report[]

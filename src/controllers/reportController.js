@@ -37,7 +37,10 @@ export async function getReport(req, res, next) {
       include: {
         project: true,
         lead: true,
-        disaggregatedData: true,
+        disaggregatedData: {
+          include: { indicator: true },
+          orderBy: { id: "asc" },
+        },
       },
     });
     if (!report) {
