@@ -1,6 +1,6 @@
 ## MEL Platform Backend
 
-Node.js backend for the Monitoring, Evaluation & Learning (MEL) Platform, designed to integrate with your existing Lovable frontend.
+Node.js backend for the Monitoring, Evaluation & Learning (MEL) Platform designed to integrate with your existing Lovable frontend.
 
 ### Stack
 
