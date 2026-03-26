@@ -1,3 +1,4 @@
+import http from "http";
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
@@ -7,6 +8,7 @@ import { env } from "./config/env.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import { router as apiRouter } from "./routes/index.js";
 import { swaggerSpec } from "./config/swagger.js";
+import { initSocket } from "./services/socketService.js";
 
 const app = express();
 
@@ -33,7 +35,11 @@ app.use("/api", apiRouter);
 
 app.use(errorHandler);
 
-app.listen(env.port, () => {
-  console.log(`MEL Platform backend running on port ${env.port}`);
-});
+const server = http.createServer(app);
 
+initSocket(server);
+
+server.listen(env.port, () => {
+  console.log(`MEL Platform backend running on port ${env.port}`);
+  console.log(`WebSocket server ready on port ${env.port}`);
+});

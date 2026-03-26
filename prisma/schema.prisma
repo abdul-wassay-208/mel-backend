@@ -7,6 +7,184 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+model User {
+  id                     Int                     @id @default(autoincrement())
+  name                   String
+  email                  String                  @unique
+  passwordHash           String
+  role                   Role
+  isActive               Boolean                 @default(true)
+  createdAt              DateTime                @default(now())
+  updatedAt              DateTime                @updatedAt
+  inviteExpiresAt        DateTime?
+  inviteToken            String?                 @unique
+  auditLogs              AuditLog[]
+  projectsLed            Project[]               @relation("ProjectLead")
+  projectLeadAssignments ProjectLeadAssignment[]
+  reports                Report[]
+  notifications Notification[]
+}
+
+model ProjectLeadAssignment {
+  id         Int      @id @default(autoincrement())
+  projectId  Int
+  userId     Int
+  assignedAt DateTime @default(now())
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@index([userId])
+  @@index([projectId])
+}
+
+model Project {
+  id                Int                     @id @default(autoincrement())
+  name              String
+  description       String?
+  category          String?
+  startDate         DateTime
+  endDate           DateTime?
+  reportingInterval ReportingInterval
+  status            ProjectStatus           @default(DRAFT)
+  nextDueDate       DateTime?
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+  leadId            Int?
+  expectedUsers     Int?
+  generalCategory   String?
+  programLead       String?
+  projectSupport    String?
+  specificCategory  String?
+  disaggregatedData DisaggregatedData[]
+  objectives        Objective[]
+  lead              User?                   @relation("ProjectLead", fields: [leadId], references: [id])
+  leads             ProjectLeadAssignment[]
+  reports           Report[]
+}
+
+model Objective {
+  id          Int       @id @default(autoincrement())
+  title       String
+  description String?
+  projectId   Int
+  project     Project   @relation(fields: [projectId], references: [id])
+  outcomes    Outcome[]
+}
+
+model Outcome {
+  id          Int         @id @default(autoincrement())
+  title       String
+  description String?
+  objectiveId Int
+  indicators  Indicator[]
+  objective   Objective   @relation(fields: [objectiveId], references: [id])
+}
+
+model Indicator {
+  id                Int                 @id @default(autoincrement())
+  name              String
+  description       String?
+  unit              String?
+  outcomeId         Int
+  disaggregatedData DisaggregatedData[]
+  outcome           Outcome             @relation(fields: [outcomeId], references: [id])
+}
+
+model Report {
+  id                Int                 @id @default(autoincrement())
+  title             String
+  periodStart       DateTime
+  periodEnd         DateTime
+  status            ReportStatus        @default(DRAFT)
+  submittedAt       DateTime?
+  publishedAt       DateTime?
+  completedAt       DateTime?
+  learningSummary   String?
+  projectId         Int
+  leadId            Int
+  disaggregatedData DisaggregatedData[]
+  lead              User                @relation(fields: [leadId], references: [id])
+  project           Project             @relation(fields: [projectId], references: [id])
+}
+
+model DisaggregatedData {
+  id              Int       @id @default(autoincrement())
+  projectId       Int?
+  reportId        Int?
+  indicatorId     Int
+  Economy         Int?
+  Infrastructure  Int?
+  Institution     String?
+  Operator        String?
+  Gender          String?
+  Age             String?
+  Sector          String?
+  ASN             String?
+  Technology      String?
+  Disability      String?
+  RuralUrban      String?
+  Topic           String?
+  StakeholderType String?
+  Dialogues       Int?
+  PartnerType     String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+  NumberOfUsers   Int?
+  City            String?
+  DialoguesText   String?
+  Language        String?
+  Notes           String?
+  indicator       Indicator @relation(fields: [indicatorId], references: [id])
+  project         Project?  @relation(fields: [projectId], references: [id])
+  report          Report?   @relation(fields: [reportId], references: [id])
+}
+
+model EditRequest {
+  id              Int       @id @default(autoincrement())
+  projectId       Int
+  reportId        Int
+  indicatorId     Int
+  projectName     String
+  indicatorName   String
+  fieldsToEdit    String
+  reason          String
+  status          String    @default("PENDING")
+  requestedById   Int
+  requestedByName String
+  requestedAt     DateTime  @default(now())
+  resolvedAt      DateTime?
+  resolvedById    Int?
+}
+
+model AuditLog {
+  id        Int             @id @default(autoincrement())
+  entity    String
+  entityId  Int
+  action    AuditActionType
+  timestamp DateTime        @default(now())
+  oldValues Json?
+  newValues Json?
+  userId    Int?
+  user      User?           @relation(fields: [userId], references: [id])
+}
+
+model Notification {
+  id          Int              @id @default(autoincrement())
+  userId      Int
+  user        User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type        NotificationType
+  title       String
+  message     String
+  data        Json?
+  isRead      Boolean          @default(false)
+  readAt      DateTime?
+  createdAt   DateTime         @default(now())
+
+  @@index([userId])
+  @@index([userId, isRead])
+}
+
 enum Role {
   ADMIN
   PROJECT_LEAD
@@ -41,196 +219,9 @@ enum AuditActionType {
   STATUS_CHANGE
 }
 
-model User {
-  id          Int       @id @default(autoincrement())
-  name        String
-  email       String    @unique
-  passwordHash String
-  role        Role
-  isActive    Boolean   @default(true)
-  inviteToken      String?   @unique
-  inviteExpiresAt  DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  projectsLed Project[] @relation("ProjectLead")
-  projectLeadAssignments ProjectLeadAssignment[]
-  reports     Report[]
-  auditLogs   AuditLog[]
+enum NotificationType {
+  PROJECT_ASSIGNED
+  REPORT_SUBMITTED
+  REPORT_PUBLISHED
+  EDIT_REQUESTED
 }
-
-model ProjectLeadAssignment {
-  id        Int      @id @default(autoincrement())
-  projectId Int
-  userId    Int
-  assignedAt DateTime @default(now())
-
-  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([projectId, userId])
-  @@index([userId])
-  @@index([projectId])
-}
-
-model Project {
-  id                Int               @id @default(autoincrement())
-  name              String
-  description       String?
-  category          String?
-  programLead       String?
-  projectSupport    String?
-  generalCategory   String?
-  specificCategory  String?
-  expectedUsers     Int?
-  startDate         DateTime
-  endDate           DateTime?
-  reportingInterval ReportingInterval
-  status            ProjectStatus     @default(DRAFT)
-  nextDueDate       DateTime?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  leadId   Int?
-  lead     User?      @relation("ProjectLead", fields: [leadId], references: [id])
-  leads    ProjectLeadAssignment[]
-
-  objectives  Objective[]
-  reports     Report[]
-  disaggregatedData DisaggregatedData[]
-}
-
-model Objective {
-  id          Int       @id @default(autoincrement())
-  title       String
-  description String?
-
-  projectId Int
-  project   Project   @relation(fields: [projectId], references: [id])
-
-  outcomes Outcome[]
-}
-
-model Outcome {
-  id          Int       @id @default(autoincrement())
-  title       String
-  description String?
-
-  objectiveId Int
-  objective   Objective @relation(fields: [objectiveId], references: [id])
-
-  indicators Indicator[]
-}
-
-model Indicator {
-  id          Int       @id @default(autoincrement())
-  name        String
-  description String?
-  unit        String?
-
-  outcomeId Int
-  outcome   Outcome   @relation(fields: [outcomeId], references: [id])
-
-  disaggregatedData DisaggregatedData[]
-}
-
-model Report {
-  id          Int          @id @default(autoincrement())
-  title       String
-  periodStart DateTime
-  periodEnd   DateTime
-  status      ReportStatus @default(DRAFT)
-  submittedAt DateTime?
-  publishedAt DateTime?
-  completedAt DateTime?
-  learningSummary String?
-
-  projectId Int
-  project   Project  @relation(fields: [projectId], references: [id])
-
-  leadId Int
-  lead   User     @relation(fields: [leadId], references: [id])
-
-  disaggregatedData DisaggregatedData[]
-}
-
-model DisaggregatedData {
-  id Int @id @default(autoincrement())
-
-  projectId  Int?
-  project    Project?  @relation(fields: [projectId], references: [id])
-
-  reportId Int?
-  report   Report? @relation(fields: [reportId], references: [id])
-
-  indicatorId Int
-  indicator   Indicator @relation(fields: [indicatorId], references: [id])
-
-  Economy          Int?
-  Infrastructure   Int?
-  Institution      String?
-  Operator         String?
-  Gender           String?
-  Age              String?
-  City             String?
-  Language         String?
-  Sector           String?
-  ASN              String?
-  Technology       String?
-  Disability       String?
-  RuralUrban       String?
-  Topic            String?
-  StakeholderType  String?
-  Dialogues        Int?
-  DialoguesText    String?
-  PartnerType      String?
-
-  // Total number of users / beneficiaries represented by this row
-  NumberOfUsers    Int?
-
-  Notes            String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-model EditRequest {
-  id             Int      @id @default(autoincrement())
-
-  // Foreign-key IDs (kept as plain ints to avoid extra relation wiring)
-  projectId      Int
-  reportId       Int
-  indicatorId    Int
-
-  // Meta copied from client for easier querying
-  projectName    String
-  indicatorName  String
-
-  // JSON-encoded array of field keys the lead wants to edit
-  fieldsToEdit   String
-  reason         String
-
-  status         String   @default("PENDING") // PENDING | APPROVED | REJECTED
-
-  requestedById   Int
-  requestedByName String
-  requestedAt     DateTime @default(now())
-
-  resolvedAt     DateTime?
-  resolvedById   Int?
-}
-
-model AuditLog {
-  id        Int             @id @default(autoincrement())
-  entity    String
-  entityId  Int
-  action    AuditActionType
-  timestamp DateTime        @default(now())
-  oldValues Json?
-  newValues Json?
-
-  userId Int?
-  user   User?    @relation(fields: [userId], references: [id])
-}
-
