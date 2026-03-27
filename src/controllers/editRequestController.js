@@ -1,6 +1,7 @@
 import { prisma } from "../config/prisma.js";
 import { createAuditLog } from "../utils/audit.js";
 import { editRequestCreateSchema, editRequestStatusSchema } from "../validators/editRequestValidators.js";
+import { createNotificationForMany } from "../services/notificationService.js";
 
 export async function listEditRequests(req, res, next) {
   try {
@@ -85,6 +86,25 @@ export async function createEditRequest(req, res, next) {
       action: "CREATE",
       oldValues: null,
       newValues: created,
+    });
+
+    const admins = await prisma.user.findMany({ where: { role: "ADMIN", isActive: true }, select: { id: true } });
+    const adminIds = admins.map((a) => a.id);
+    await createNotificationForMany(adminIds, {
+      type: "EDIT_REQUESTED",
+      title: "Edit Request Submitted",
+      message: `${req.user.name} requested an edit for report "${report.title}" on project "${project.name}".`,
+      data: {
+        editRequestId: created.id,
+        reportId: report.id,
+        projectId: project.id,
+        indicatorId: created.indicatorId,
+      },
+      emailSubject: `Edit Request: ${report.title}`,
+      emailHtml: `<p>Hello,</p>
+<p><strong>${req.user.name}</strong> has requested an edit for the report <strong>"${report.title}"</strong> on project <strong>"${project.name}"</strong>.</p>
+<p>Reason: ${created.reason}</p>
+<p>Please log in to the MEL Platform to review and approve or reject the request.</p>`,
     });
 
     res.status(201).json(created);
