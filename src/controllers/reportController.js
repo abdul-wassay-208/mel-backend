@@ -2,7 +2,7 @@ import { isAfter } from "date-fns";
 import { prisma } from "../config/prisma.js";
 import { reportCreateSchema, reportUpdateSchema, reportStatusChangeSchema } from "../validators/reportValidators.js";
 import { createAuditLog } from "../utils/audit.js";
-import { createNotification, createNotificationForMany } from "../services/notificationService.js";
+import { createNotificationForMany } from "../services/notificationService.js";
 
 async function ensureIndicatorsComplete(reportId) {
   const disaggCount = await prisma.disaggregatedData.count({
@@ -237,15 +237,16 @@ export async function changeReportStatus(req, res, next) {
 <p>Please log in to the MEL Platform to review it.</p>`,
       });
     } else if (action === "PUBLISH") {
-      await createNotification({
-        userId: existing.leadId,
+      const admins = await prisma.user.findMany({ where: { role: "ADMIN", isActive: true }, select: { id: true } });
+      const adminIds = admins.map((a) => a.id);
+      await createNotificationForMany(adminIds, {
         type: "REPORT_PUBLISHED",
         title: "Report Published",
-        message: `Your report "${updated.title}" has been published.`,
+        message: `Report "${updated.title}" submitted by ${existing.lead.name} has been published.`,
         data: { reportId: updated.id, projectId: existing.projectId, title: updated.title },
         emailSubject: `Report Published: ${updated.title}`,
-        emailHtml: `<p>Hello ${existing.lead.name},</p>
-<p>Your report <strong>"${updated.title}"</strong> has been published on the MEL Platform.</p>`,
+        emailHtml: `<p>Hello,</p>
+<p>The report <strong>"${updated.title}"</strong> submitted by <strong>${existing.lead.name}</strong> has been published on the MEL Platform.</p>`,
       });
     }
 
