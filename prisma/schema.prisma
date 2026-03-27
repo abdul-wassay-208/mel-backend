@@ -230,3 +230,11 @@ enum NotificationType {
   REPORT_PUBLISHED
   EDIT_REQUESTED
 }
+
+model AppConfig {
+  id        Int      @id @default(autoincrement())
+  key       String   @unique
+  value     Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
