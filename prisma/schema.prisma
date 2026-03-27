@@ -10,6 +10,7 @@ datasource db {
 enum Role {
   ADMIN
   PROJECT_LEAD
+  SUPER_ADMIN
 }
 
 enum ProjectStatus {
@@ -41,6 +42,36 @@ enum AuditActionType {
   STATUS_CHANGE
 }
 
+enum NotificationType {
+  PROJECT_ASSIGNED
+  REPORT_SUBMITTED
+  REPORT_PUBLISHED
+  EDIT_REQUESTED
+}
+
+model Notification {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType
+  title     String
+  message   String
+  data      Json?
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  readAt    DateTime?
+
+  @@index([userId])
+}
+
+model AppConfig {
+  id        Int      @id @default(autoincrement())
+  key       String   @unique
+  value     Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 model User {
   id          Int       @id @default(autoincrement())
   name        String
@@ -55,6 +86,7 @@ model User {
 
   projectsLed Project[] @relation("ProjectLead")
   projectLeadAssignments ProjectLeadAssignment[]
+  notifications Notification[]
   reports     Report[]
   auditLogs   AuditLog[]
 }

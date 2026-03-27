@@ -7,6 +7,7 @@ import { router as auditLogRouter } from "./auditLogRoutes.js";
 import { router as analyticsRouter } from "./analyticsRoutes.js";
 import { router as notificationRouter } from "./notificationRoutes.js";
 import { router as userRouter } from "./userRoutes.js";
+import { router as configRouter } from "./configRoutes.js";
 
 export const router = express.Router();
 
@@ -18,4 +19,5 @@ router.use("/audit-logs", auditLogRouter);
 router.use("/analytics", analyticsRouter);
 router.use("/notifications", notificationRouter);
 router.use("/users", userRouter);
+router.use("/config", configRouter);
 

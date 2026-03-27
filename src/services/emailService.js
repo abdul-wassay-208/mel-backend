@@ -6,7 +6,7 @@ const BREEVO_API_URL = "https://api.brevo.com/v3/smtp/email";
 export async function sendEmail({ to, subject, htmlContent }) {
   if (!env.brevoApiKey || !env.brevoFromEmail) {
     console.warn("Brevo API key or from email not configured; email will not be sent.");
-    return;
+    return { ok: false, skipped: true, reason: "BREVO_NOT_CONFIGURED" };
   }
 
   const payload = {
@@ -27,14 +27,20 @@ export async function sendEmail({ to, subject, htmlContent }) {
       },
     });
     console.log("Brevo email sent:", response.status, response.statusText);
-    return response.data;
+    return { ok: true, provider: "brevo", data: response.data };
   } catch (error) {
     if (error.response) {
       console.error("Brevo email error:", error.response.status, error.response.data);
+      return {
+        ok: false,
+        provider: "brevo",
+        status: error.response.status,
+        data: error.response.data,
+      };
     } else {
       console.error("Brevo email error:", error.message);
+      return { ok: false, provider: "brevo", message: error.message };
     }
-    throw error;
   }
 }
 

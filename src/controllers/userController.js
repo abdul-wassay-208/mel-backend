@@ -5,6 +5,21 @@ import { sendEmail } from "../services/emailService.js";
 import { env } from "../config/env.js";
 import { randomUUID } from "crypto";
 
+function buildInviteLink(inviteToken) {
+  const frontendBase = env.frontendUrl || "http://localhost:8080";
+  return `${frontendBase.replace(/\/+$/, "")}/invite/${inviteToken}`;
+}
+
+function inviteEmailHtml({ name, inviteLink }) {
+  return `<p>Hello ${name},</p>
+<p>You have been invited to access the <strong>MEL Platform</strong>.</p>
+<p>Please click the button below to set your password and activate your account:</p>
+<p><a href="${inviteLink}" style="display:inline-block;padding:10px 18px;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:6px;">Set your password</a></p>
+<p>If the button does not work, copy and paste this link into your browser:</p>
+<p><a href="${inviteLink}">${inviteLink}</a></p>
+<p>If you did not expect this invitation, you can ignore this email.</p>`;
+}
+
 export async function listUsers(req, res, next) {
   try {
     const users = await prisma.user.findMany({
@@ -22,7 +37,7 @@ export async function createUser(req, res, next) {
     if (!name || !email || !role) {
       return res.status(400).json({ message: "name, email and role are required" });
     }
-    if (!["ADMIN", "PROJECT_LEAD"].includes(role)) {
+    if (!["ADMIN", "PROJECT_LEAD", "SUPER_ADMIN"].includes(role)) {
       return res.status(400).json({ message: "Invalid role" });
     }
 
@@ -58,22 +73,64 @@ export async function createUser(req, res, next) {
       newValues: user,
     });
 
-    const frontendBase = env.frontendUrl || "http://localhost:8080";
-    const inviteLink = `${frontendBase.replace(/\/+$/, "")}/invite/${inviteToken}`;
-
-    await sendEmail({
+    const inviteLink = buildInviteLink(inviteToken);
+    const emailResult = await sendEmail({
       to: email,
       subject: "You have been invited to the MEL Platform",
-      htmlContent: `<p>Hello ${name},</p>
-<p>You have been invited to access the <strong>MEL Platform</strong>.</p>
-<p>Please click the button below to set your password and activate your account:</p>
-<p><a href="${inviteLink}" style="display:inline-block;padding:10px 18px;background:#2563eb;color:#ffffff;text-decoration:none;border-radius:6px;">Set your password</a></p>
-<p>If the button does not work, copy and paste this link into your browser:</p>
-<p><a href="${inviteLink}">${inviteLink}</a></p>
-<p>If you did not expect this invitation, you can ignore this email.</p>`,
+      htmlContent: inviteEmailHtml({ name, inviteLink }),
     });
 
-    res.status(201).json(user);
+    // Never fail user creation due to email provider issues.
+    res.status(201).json({
+      ...user,
+      inviteLink,
+      email: emailResult,
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+export async function resendInvite(req, res, next) {
+  try {
+    const id = Number(req.params.id);
+    const user = await prisma.user.findUnique({ where: { id } });
+    if (!user) return res.status(404).json({ message: "User not found" });
+
+    if (user.isActive) {
+      return res.status(400).json({ message: "User is already active" });
+    }
+
+    const inviteToken = randomUUID();
+    const inviteExpiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+
+    const updated = await prisma.user.update({
+      where: { id },
+      data: { inviteToken, inviteExpiresAt },
+    });
+
+    await createAuditLog({
+      userId: req.user.id,
+      entity: "User",
+      entityId: id,
+      action: "UPDATE",
+      oldValues: { inviteToken: user.inviteToken, inviteExpiresAt: user.inviteExpiresAt },
+      newValues: { inviteToken: updated.inviteToken, inviteExpiresAt: updated.inviteExpiresAt },
+    });
+
+    const inviteLink = buildInviteLink(inviteToken);
+    const emailResult = await sendEmail({
+      to: updated.email,
+      subject: "Your MEL Platform invitation link",
+      htmlContent: inviteEmailHtml({ name: updated.name, inviteLink }),
+    });
+
+    return res.json({
+      message: "Invite resent",
+      user: updated,
+      inviteLink,
+      email: emailResult,
+    });
   } catch (err) {
     next(err);
   }
@@ -93,7 +150,7 @@ export async function updateUser(req, res, next) {
       where: { id },
       data: {
         name: name ?? existing.name,
-        role: role && ["ADMIN", "PROJECT_LEAD"].includes(role) ? role : existing.role,
+        role: role && ["ADMIN", "PROJECT_LEAD", "SUPER_ADMIN"].includes(role) ? role : existing.role,
         isActive: typeof isActive === "boolean" ? isActive : existing.isActive,
       },
     });
