@@ -202,6 +202,17 @@ export async function createProject(req, res, next) {
       newValues: project,
     });
 
+    await createNotificationForMany(uniqueLeadIds, {
+      type: "PROJECT_ASSIGNED",
+      title: "You have been assigned to a project",
+      message: `You have been assigned as Project Lead for "${project.name}".`,
+      data: { projectId: project.id, projectName: project.name },
+      emailSubject: `Project Assigned: ${project.name}`,
+      emailHtml: `<p>Hello,</p>
+<p>You have been assigned as <strong>Project Lead</strong> for the project <strong>${project.name}</strong>.</p>
+<p>Please log in to the MEL Platform to view the project details.</p>`,
+    });
+
     res.status(201).json(project);
   } catch (err) {
     next(err);
