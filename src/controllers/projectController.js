@@ -1,6 +1,7 @@
 import { prisma } from "../config/prisma.js";
 import { projectCreateSchema, projectUpdateSchema, assignLeadSchema } from "../validators/projectValidators.js";
 import { createAuditLog } from "../utils/audit.js";
+import { createNotificationForMany } from "../services/notificationService.js";
 
 function toPrismaReportingInterval(value) {
   if (!value) return undefined;
@@ -316,6 +317,18 @@ export async function assignProjectLead(req, res, next) {
       action: "STATUS_CHANGE",
       oldValues: project,
       newValues: updated,
+    });
+
+    // Notify every assigned lead
+    await createNotificationForMany(leadIds, {
+      type: "PROJECT_ASSIGNED",
+      title: "You have been assigned to a project",
+      message: `You have been assigned as Project Lead for "${updated.name}".`,
+      data: { projectId: updated.id, projectName: updated.name },
+      emailSubject: `Project Assigned: ${updated.name}`,
+      emailHtml: `<p>Hello,</p>
+<p>You have been assigned as <strong>Project Lead</strong> for the project <strong>${updated.name}</strong>.</p>
+<p>Please log in to the MEL Platform to view the project details.</p>`,
     });
 
     res.json(updated);
