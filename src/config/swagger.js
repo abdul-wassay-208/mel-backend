@@ -145,6 +145,23 @@ export const swaggerSpec = {
           createdAt: { type: "string", format: "date-time" },
         },
       },
+      Notification: {
+        type: "object",
+        properties: {
+          id: { type: "integer" },
+          userId: { type: "integer" },
+          type: {
+            type: "string",
+            enum: ["PROJECT_ASSIGNED", "REPORT_SUBMITTED", "REPORT_PUBLISHED", "EDIT_REQUESTED"],
+          },
+          title: { type: "string" },
+          message: { type: "string" },
+          data: { type: "object", nullable: true },
+          isRead: { type: "boolean" },
+          readAt: { type: "string", format: "date-time", nullable: true },
+          createdAt: { type: "string", format: "date-time" },
+        },
+      },
     },
   },
   security: [{ bearerAuth: [] }],
@@ -156,7 +173,7 @@ export const swaggerSpec = {
     { name: "Disaggregated Data", description: "Indicator disaggregated data" },
     { name: "Audit Logs", description: "Audit trail (Admin only)" },
     { name: "Analytics", description: "Reporting analytics" },
-    { name: "Notifications", description: "Notification management (Admin only)" },
+    { name: "Notifications", description: "Per-user notification management with real-time WebSocket support" },
   ],
   paths: {
     // ─── AUTH ────────────────────────────────────────────────────────────────
@@ -802,31 +819,88 @@ export const swaggerSpec = {
     },
 
     // ─── NOTIFICATIONS ────────────────────────────────────────────────────────
-    "/api/notifications/send": {
-      post: {
+    "/api/notifications": {
+      get: {
         tags: ["Notifications"],
-        summary: "Send a test notification email",
-        description: "Requires ADMIN role.",
-        requestBody: {
-          required: true,
-          content: {
-            "application/json": {
-              schema: {
-                type: "object",
-                properties: {
-                  to: { type: "string", format: "email", example: "user@mel.org" },
-                  subject: { type: "string", example: "Test Notification" },
-                  message: { type: "string", example: "This is a test." },
+        summary: "List notifications for the authenticated user",
+        description: "Returns all notifications belonging to the current user, newest first. Add `?unreadOnly=true` to filter unread only.",
+        parameters: [
+          {
+            name: "unreadOnly",
+            in: "query",
+            required: false,
+            schema: { type: "boolean" },
+            description: "If true, returns only unread notifications",
+          },
+        ],
+        responses: {
+          200: {
+            description: "Array of notifications",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "array",
+                  items: { $ref: "#/components/schemas/Notification" },
                 },
               },
             },
           },
-        },
-        responses: {
-          200: { description: "Notification sent" },
-          400: { description: "Validation error", content: { "application/json": { schema: { $ref: "#/components/schemas/Error" } } } },
           401: { description: "Unauthorized" },
-          403: { description: "Forbidden" },
+        },
+      },
+    },
+
+    "/api/notifications/unread-count": {
+      get: {
+        tags: ["Notifications"],
+        summary: "Get unread notification count for the authenticated user",
+        responses: {
+          200: {
+            description: "Unread count",
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  properties: { count: { type: "integer", example: 3 } },
+                },
+              },
+            },
+          },
+          401: { description: "Unauthorized" },
+        },
+      },
+    },
+
+    "/api/notifications/read-all": {
+      patch: {
+        tags: ["Notifications"],
+        summary: "Mark all notifications as read",
+        responses: {
+          200: { description: "All notifications marked as read" },
+          401: { description: "Unauthorized" },
+        },
+      },
+    },
+
+    "/api/notifications/{id}/read": {
+      patch: {
+        tags: ["Notifications"],
+        summary: "Mark a single notification as read",
+        parameters: [
+          { name: "id", in: "path", required: true, schema: { type: "integer" } },
+        ],
+        responses: {
+          200: {
+            description: "Updated notification",
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/Notification" },
+              },
+            },
+          },
+          401: { description: "Unauthorized" },
+          403: { description: "Forbidden – notification belongs to another user" },
+          404: { description: "Notification not found" },
         },
       },
     },

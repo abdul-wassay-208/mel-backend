@@ -2,7 +2,7 @@ import { isAfter } from "date-fns";
 import { prisma } from "../config/prisma.js";
 import { reportCreateSchema, reportUpdateSchema, reportStatusChangeSchema } from "../validators/reportValidators.js";
 import { createAuditLog } from "../utils/audit.js";
-import { sendEmail } from "../services/emailService.js";
+import { createNotificationForMany } from "../services/notificationService.js";
 
 async function ensureIndicatorsComplete(reportId) {
   const disaggCount = await prisma.disaggregatedData.count({
@@ -223,24 +223,30 @@ export async function changeReportStatus(req, res, next) {
       newValues: updated,
     });
 
-    // Basic email notifications
     if (action === "SUBMIT") {
-      // notify admin(s) - here we just fetch all admins
-      const admins = await prisma.user.findMany({ where: { role: "ADMIN", isActive: true } });
-      await Promise.all(
-        admins.map((admin) =>
-          sendEmail({
-            to: admin.email,
-            subject: `Report submitted: ${updated.title}`,
-            htmlContent: `<p>Report "<strong>${updated.title}</strong>" has been submitted by ${existing.lead.name}.</p>`,
-          })
-        )
-      );
+      const admins = await prisma.user.findMany({ where: { role: "ADMIN", isActive: true }, select: { id: true } });
+      const adminIds = admins.map((a) => a.id);
+      await createNotificationForMany(adminIds, {
+        type: "REPORT_SUBMITTED",
+        title: "Report Submitted",
+        message: `${existing.lead.name} submitted the report "${updated.title}".`,
+        data: { reportId: updated.id, projectId: existing.projectId, title: updated.title },
+        emailSubject: `Report Submitted: ${updated.title}`,
+        emailHtml: `<p>Hello,</p>
+<p><strong>${existing.lead.name}</strong> has submitted the report <strong>"${updated.title}"</strong>.</p>
+<p>Please log in to the MEL Platform to review it.</p>`,
+      });
     } else if (action === "PUBLISH") {
-      await sendEmail({
-        to: existing.lead.email,
-        subject: `Report published: ${updated.title}`,
-        htmlContent: `<p>Your report "<strong>${updated.title}</strong>" has been published.</p>`,
+      const admins = await prisma.user.findMany({ where: { role: "ADMIN", isActive: true }, select: { id: true } });
+      const adminIds = admins.map((a) => a.id);
+      await createNotificationForMany(adminIds, {
+        type: "REPORT_PUBLISHED",
+        title: "Report Published",
+        message: `Report "${updated.title}" submitted by ${existing.lead.name} has been published.`,
+        data: { reportId: updated.id, projectId: existing.projectId, title: updated.title },
+        emailSubject: `Report Published: ${updated.title}`,
+        emailHtml: `<p>Hello,</p>
+<p>The report <strong>"${updated.title}"</strong> submitted by <strong>${existing.lead.name}</strong> has been published on the MEL Platform.</p>`,
       });
     }
 
