@@ -8,6 +8,7 @@ import { router as analyticsRouter } from "./analyticsRoutes.js";
 import { router as notificationRouter } from "./notificationRoutes.js";
 import { router as userRouter } from "./userRoutes.js";
 import { router as configRouter } from "./configRoutes.js";
+import { router as editRequestRouter } from "./editRequestRoutes.js";
 
 export const router = express.Router();
 
@@ -20,4 +21,5 @@ router.use("/analytics", analyticsRouter);
 router.use("/notifications", notificationRouter);
 router.use("/users", userRouter);
 router.use("/config", configRouter);
+router.use("/edit-requests", editRequestRouter);
 

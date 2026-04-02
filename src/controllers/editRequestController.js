@@ -2,6 +2,7 @@ import { prisma } from "../config/prisma.js";
 import { createAuditLog } from "../utils/audit.js";
 import { editRequestCreateSchema, editRequestStatusSchema } from "../validators/editRequestValidators.js";
 import { createNotificationForMany } from "../services/notificationService.js";
+import { env } from "../config/env.js";
 
 export async function listEditRequests(req, res, next) {
   try {
@@ -140,13 +141,27 @@ export async function updateEditRequestStatus(req, res, next) {
 
     const { status } = parsed.data;
 
-    const updated = await prisma.editRequest.update({
-      where: { id },
-      data: {
-        status,
-        resolvedAt: new Date(),
-        resolvedById: req.user.id,
-      },
+    const updated = await prisma.$transaction(async (tx) => {
+      const next = await tx.editRequest.update({
+        where: { id },
+        data: {
+          status,
+          resolvedAt: new Date(),
+          resolvedById: req.user.id,
+        },
+      });
+
+      // If approved, unlock report for editing by setting it to UNDER_REVIEW.
+      // This avoids schema migrations (no UNLOCKED enum) while allowing leads to edit.
+      if (status === "APPROVED") {
+        await tx.report.update({
+          where: { id: existing.reportId },
+          data: { status: "UNDER_REVIEW" },
+        });
+      }
+
+      // If rejected, keep report in PUBLISHED state (do not change).
+      return next;
     });
 
     await createAuditLog({
@@ -156,6 +171,34 @@ export async function updateEditRequestStatus(req, res, next) {
       action: "STATUS_CHANGE",
       oldValues: existing,
       newValues: updated,
+    });
+
+    // Notify the requesting lead (in-app + email if configured)
+    const frontendBase = (env.frontendUrl || "http://localhost:8080").replace(/\/+$/, "");
+    const leadLink =
+      status === "APPROVED"
+        ? `${frontendBase}/lead/report/${existing.projectId}/${existing.reportId}`
+        : `${frontendBase}/lead`;
+
+    await createNotificationForMany([existing.requestedById], {
+      type: "EDIT_REQUESTED",
+      title: status === "APPROVED" ? "Edit Request Approved" : "Edit Request Rejected",
+      message:
+        status === "APPROVED"
+          ? `Your edit request for "${existing.indicatorName}" was approved. The report is now unlocked for editing.`
+          : `Your edit request for "${existing.indicatorName}" was rejected.`,
+      data: {
+        editRequestId: existing.id,
+        reportId: existing.reportId,
+        projectId: existing.projectId,
+        indicatorId: existing.indicatorId,
+        resolution: status,
+      },
+      emailSubject: status === "APPROVED" ? "Edit Request Approved" : "Edit Request Rejected",
+      emailHtml:
+        status === "APPROVED"
+          ? `<p>Hello,</p><p>Your edit request for <strong>${existing.indicatorName}</strong> was approved.</p><p><a href="${leadLink}">Open report in MEL</a></p>`
+          : `<p>Hello,</p><p>Your edit request for <strong>${existing.indicatorName}</strong> was rejected.</p>`,
     });
 
     res.json(updated);

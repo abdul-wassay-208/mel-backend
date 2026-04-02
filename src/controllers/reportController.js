@@ -3,6 +3,7 @@ import { prisma } from "../config/prisma.js";
 import { reportCreateSchema, reportUpdateSchema, reportStatusChangeSchema } from "../validators/reportValidators.js";
 import { createAuditLog } from "../utils/audit.js";
 import { createNotificationForMany } from "../services/notificationService.js";
+import { env } from "../config/env.js";
 
 async function ensureIndicatorsComplete(reportId) {
   const disaggCount = await prisma.disaggregatedData.count({
@@ -226,6 +227,8 @@ export async function changeReportStatus(req, res, next) {
     if (action === "SUBMIT") {
       const admins = await prisma.user.findMany({ where: { role: "ADMIN", isActive: true }, select: { id: true } });
       const adminIds = admins.map((a) => a.id);
+      const frontendBase = (env.frontendUrl || "http://localhost:8080").replace(/\/+$/, "");
+      const adminLink = `${frontendBase}/admin/reports/${updated.id}`;
       await createNotificationForMany(adminIds, {
         type: "REPORT_SUBMITTED",
         title: "Report Submitted",
@@ -234,11 +237,13 @@ export async function changeReportStatus(req, res, next) {
         emailSubject: `Report Submitted: ${updated.title}`,
         emailHtml: `<p>Hello,</p>
 <p><strong>${existing.lead.name}</strong> has submitted the report <strong>"${updated.title}"</strong>.</p>
-<p>Please log in to the MEL Platform to review it.</p>`,
+<p><a href="${adminLink}">Open report in MEL</a></p>`,
       });
     } else if (action === "PUBLISH") {
       const admins = await prisma.user.findMany({ where: { role: "ADMIN", isActive: true }, select: { id: true } });
       const adminIds = admins.map((a) => a.id);
+      const frontendBase = (env.frontendUrl || "http://localhost:8080").replace(/\/+$/, "");
+      const adminLink = `${frontendBase}/admin/reports/${updated.id}`;
       await createNotificationForMany(adminIds, {
         type: "REPORT_PUBLISHED",
         title: "Report Published",
@@ -246,7 +251,8 @@ export async function changeReportStatus(req, res, next) {
         data: { reportId: updated.id, projectId: existing.projectId, title: updated.title },
         emailSubject: `Report Published: ${updated.title}`,
         emailHtml: `<p>Hello,</p>
-<p>The report <strong>"${updated.title}"</strong> submitted by <strong>${existing.lead.name}</strong> has been published on the MEL Platform.</p>`,
+<p>The report <strong>"${updated.title}"</strong> submitted by <strong>${existing.lead.name}</strong> has been published on the MEL Platform.</p>
+<p><a href="${adminLink}">Open report in MEL</a></p>`,
       });
     }
 

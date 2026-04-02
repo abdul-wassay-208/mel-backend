@@ -26,3 +26,16 @@ export const disaggregatedDataSchema = z.object({
   Notes: z.string().optional(),
 });
 
+export const disaggregatedDataFieldsSchema = disaggregatedDataSchema.omit({
+  reportId: true,
+  indicatorId: true,
+  projectId: true,
+});
+
+export const disaggregatedDataReplaceSchema = z.object({
+  reportId: z.number().int(),
+  indicatorId: z.number().int(),
+  projectId: z.number().int().optional(),
+  rows: z.array(disaggregatedDataFieldsSchema).default([]),
+});
+

@@ -2,6 +2,7 @@ import { prisma } from "../config/prisma.js";
 import { projectCreateSchema, projectUpdateSchema, assignLeadSchema } from "../validators/projectValidators.js";
 import { createAuditLog } from "../utils/audit.js";
 import { createNotificationForMany } from "../services/notificationService.js";
+import { env } from "../config/env.js";
 
 function toPrismaReportingInterval(value) {
   if (!value) return undefined;
@@ -202,6 +203,9 @@ export async function createProject(req, res, next) {
       newValues: project,
     });
 
+    const frontendBase = (env.frontendUrl || "http://localhost:8080").replace(/\/+$/, "");
+    const leadLink = `${frontendBase}/lead?projectId=${project.id}`;
+
     await createNotificationForMany(uniqueLeadIds, {
       type: "PROJECT_ASSIGNED",
       title: "You have been assigned to a project",
@@ -210,7 +214,7 @@ export async function createProject(req, res, next) {
       emailSubject: `Project Assigned: ${project.name}`,
       emailHtml: `<p>Hello,</p>
 <p>You have been assigned as <strong>Project Lead</strong> for the project <strong>${project.name}</strong>.</p>
-<p>Please log in to the MEL Platform to view the project details.</p>`,
+<p><a href="${leadLink}">Open project in MEL</a></p>`,
     });
 
     res.status(201).json(project);
@@ -331,6 +335,9 @@ export async function assignProjectLead(req, res, next) {
     });
 
     // Notify every assigned lead
+    const frontendBase = (env.frontendUrl || "http://localhost:8080").replace(/\/+$/, "");
+    const leadLink = `${frontendBase}/lead?projectId=${updated.id}`;
+
     await createNotificationForMany(leadIds, {
       type: "PROJECT_ASSIGNED",
       title: "You have been assigned to a project",
@@ -339,7 +346,7 @@ export async function assignProjectLead(req, res, next) {
       emailSubject: `Project Assigned: ${updated.name}`,
       emailHtml: `<p>Hello,</p>
 <p>You have been assigned as <strong>Project Lead</strong> for the project <strong>${updated.name}</strong>.</p>
-<p>Please log in to the MEL Platform to view the project details.</p>`,
+<p><a href="${leadLink}">Open project in MEL</a></p>`,
     });
 
     res.json(updated);
