@@ -7,7 +7,12 @@ import { randomUUID } from "crypto";
 
 function buildInviteLink(inviteToken) {
   const frontendBase = env.frontendUrl || "http://localhost:8080";
-  return `${frontendBase.replace(/\/+$/, "")}/invite/${inviteToken}`;
+  // Normalize to a usable absolute URL.
+  // Some env values may be provided without `http(s)://` (e.g. `myapp.vercel.app`).
+  const normalizedBase = /^https?:\/\//i.test(frontendBase)
+    ? frontendBase.replace(/\/+$/, "")
+    : `https://${frontendBase}`.replace(/\/+$/, "");
+  return `${normalizedBase}/invite/${inviteToken}`;
 }
 
 function inviteEmailHtml({ name, inviteLink }) {
@@ -84,7 +89,9 @@ export async function createUser(req, res, next) {
     res.status(201).json({
       ...user,
       inviteLink,
-      email: emailResult,
+      // Keep `email` as the actual user email string (we already include it via `...user`).
+      // The Brevo provider response is returned separately.
+      emailResult,
     });
   } catch (err) {
     next(err);
@@ -129,7 +136,7 @@ export async function resendInvite(req, res, next) {
       message: "Invite resent",
       user: updated,
       inviteLink,
-      email: emailResult,
+      emailResult,
     });
   } catch (err) {
     next(err);
