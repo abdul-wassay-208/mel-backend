@@ -9,6 +9,7 @@ import { router as notificationRouter } from "./notificationRoutes.js";
 import { router as userRouter } from "./userRoutes.js";
 import { router as configRouter } from "./configRoutes.js";
 import { router as editRequestRouter } from "./editRequestRoutes.js";
+import { router as objectivesRouter } from "./objectivesRoutes.js";
 
 export const router = express.Router();
 
@@ -22,4 +23,5 @@ router.use("/notifications", notificationRouter);
 router.use("/users", userRouter);
 router.use("/config", configRouter);
 router.use("/edit-requests", editRequestRouter);
+router.use("/objectives", objectivesRouter);
 

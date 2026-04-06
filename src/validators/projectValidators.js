@@ -1,22 +1,5 @@
 import { z } from "zod";
 
-const indicatorCreateSchema = z.object({
-  name: z.string().min(1),
-  description: z.string().optional().default(""),
-});
-
-const outcomeCreateSchema = z.object({
-  name: z.string().min(1),
-  description: z.string().optional().default(""),
-  indicators: z.array(indicatorCreateSchema).optional().default([]),
-});
-
-const objectiveCreateSchema = z.object({
-  name: z.string().min(1),
-  description: z.string().optional().default(""),
-  outcomes: z.array(outcomeCreateSchema).optional().default([]),
-});
-
 export const projectCreateSchema = z.object({
   name: z.string().min(1),
   description: z.string().optional().default(""),
@@ -33,7 +16,8 @@ export const projectCreateSchema = z.object({
   // Backward compatible: allow old single leadId OR new multi leadIds
   leadId: z.number().int().optional().nullable(),
   leadIds: z.array(z.number().int()).min(1).optional(),
-  objectives: z.array(objectiveCreateSchema).optional().default([]),
+  // IDs of global objectives to link to this project
+  objectiveIds: z.array(z.number().int()).optional().default([]),
 });
 
 export const projectUpdateSchema = projectCreateSchema.partial();
