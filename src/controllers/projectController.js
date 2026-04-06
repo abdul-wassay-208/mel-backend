@@ -42,19 +42,31 @@ export async function listProjects(req, res, next) {
           },
           orderBy: { id: "desc" },
         },
-        objectives: {
+        projectObjectives: {
           include: {
-            outcomes: {
+            objective: {
               include: {
-                indicators: true,
+                outcomes: {
+                  include: {
+                    indicators: true,
+                  },
+                },
               },
             },
           },
+          orderBy: { objectiveId: "asc" },
         },
       },
     });
 
-    res.json(projects);
+    // Normalize: expose objectives as a flat array for API consumers
+    const normalized = projects.map((p) => ({
+      ...p,
+      objectives: p.projectObjectives.map((po) => po.objective),
+      projectObjectives: undefined,
+    }));
+
+    res.json(normalized);
   } catch (err) {
     next(err);
   }
@@ -74,14 +86,19 @@ export async function getProject(req, res, next) {
           },
           orderBy: { id: "desc" },
         },
-        objectives: {
+        projectObjectives: {
           include: {
-            outcomes: {
+            objective: {
               include: {
-                indicators: true,
+                outcomes: {
+                  include: {
+                    indicators: true,
+                  },
+                },
               },
             },
           },
+          orderBy: { objectiveId: "asc" },
         },
       },
     });
@@ -97,7 +114,14 @@ export async function getProject(req, res, next) {
       return res.status(403).json({ message: "Forbidden" });
     }
 
-    res.json(project);
+    // Normalize: expose objectives as a flat array for API consumers
+    const normalized = {
+      ...project,
+      objectives: project.projectObjectives.map((po) => po.objective),
+      projectObjectives: undefined,
+    };
+
+    res.json(normalized);
   } catch (err) {
     next(err);
   }
@@ -141,6 +165,10 @@ export async function createProject(req, res, next) {
       return res.status(400).json({ message: "All leads must be valid Project Lead users" });
     }
 
+    const objectiveIds = Array.isArray(data.objectiveIds)
+      ? data.objectiveIds.map((x) => Number(x)).filter(Number.isFinite)
+      : [];
+
     const project = await prisma.project.create({
       data: {
         name: data.name,
@@ -159,65 +187,60 @@ export async function createProject(req, res, next) {
         leads: {
           create: uniqueLeadIds.map((userId) => ({ userId })),
         },
-        objectives: {
-          create: (data.objectives ?? []).map((obj) => ({
-            title: obj.name,
-            description: obj.description ?? null,
-            outcomes: {
-              create: (obj.outcomes ?? []).map((out) => ({
-                title: out.name,
-                description: out.description ?? null,
-                indicators: {
-                  create: (out.indicators ?? []).map((ind) => ({
-                    name: ind.name,
-                    description: ind.description ?? null,
-                  })),
-                },
-              })),
-            },
-          })),
+        projectObjectives: {
+          create: objectiveIds.map((objectiveId) => ({ objectiveId })),
         },
       },
       include: {
         lead: true,
         leads: { include: { user: true } },
         reports: true,
-        objectives: {
+        projectObjectives: {
           include: {
-            outcomes: {
+            objective: {
               include: {
-                indicators: true,
+                outcomes: {
+                  include: { indicators: true },
+                },
               },
             },
           },
+          orderBy: { objectiveId: "asc" },
         },
       },
     });
 
+    // Normalize response
+    const createdProject = {
+      ...project,
+      objectives: project.projectObjectives.map((po) => po.objective),
+      projectObjectives: undefined,
+    };
+
     await createAuditLog({
       userId: req.user.id,
       entity: "Project",
-      entityId: project.id,
+      entityId: createdProject.id,
       action: "CREATE",
       oldValues: null,
-      newValues: project,
+      newValues: createdProject,
     });
 
     const frontendBase = (env.frontendUrl || "http://localhost:8080").replace(/\/+$/, "");
-    const leadLink = `${frontendBase}/lead?projectId=${project.id}`;
+    const leadLink = `${frontendBase}/lead?projectId=${createdProject.id}`;
 
     await createNotificationForMany(uniqueLeadIds, {
       type: "PROJECT_ASSIGNED",
       title: "You have been assigned to a project",
-      message: `You have been assigned as Project Lead for "${project.name}".`,
-      data: { projectId: project.id, projectName: project.name },
-      emailSubject: `Project Assigned: ${project.name}`,
+      message: `You have been assigned as Project Lead for "${createdProject.name}".`,
+      data: { projectId: createdProject.id, projectName: createdProject.name },
+      emailSubject: `Project Assigned: ${createdProject.name}`,
       emailHtml: `<p>Hello,</p>
-<p>You have been assigned as <strong>Project Lead</strong> for the project <strong>${project.name}</strong>.</p>
+<p>You have been assigned as <strong>Project Lead</strong> for the project <strong>${createdProject.name}</strong>.</p>
 <p><a href="${leadLink}">Open project in MEL</a></p>`,
     });
 
-    res.status(201).json(project);
+    res.status(201).json(createdProject);
   } catch (err) {
     next(err);
   }
@@ -363,16 +386,7 @@ export async function deleteProject(req, res, next) {
     const project = await prisma.project.findUnique({
       where: { id },
       include: {
-        reports: { select: { id: true, status: true } },
-        objectives: {
-          include: {
-            outcomes: {
-              include: {
-                indicators: { select: { id: true } },
-              },
-            },
-          },
-        },
+        reports: { select: { id: true } },
       },
     });
 
@@ -382,64 +396,26 @@ export async function deleteProject(req, res, next) {
       return res.status(403).json({ message: "Forbidden" });
     }
 
-    const objectiveIds = project.objectives.map(o => o.id);
-    const outcomeIds = project.objectives.flatMap(o => o.outcomes.map(out => out.id));
-    const reportIds = project.reports.map(r => r.id);
-    const indicatorIds = project.objectives.flatMap(o =>
-      o.outcomes.flatMap(out => out.indicators.map(i => i.id))
-    );
+    const reportIds = project.reports.map((r) => r.id);
 
-    await prisma.disaggregatedData.deleteMany({
-      where: { projectId: id },
-    });
-
+    // Delete disaggregated data for this project and its reports
+    await prisma.disaggregatedData.deleteMany({ where: { projectId: id } });
     if (reportIds.length > 0) {
-      await prisma.disaggregatedData.deleteMany({
-        where: { reportId: { in: reportIds } },
-      });
+      await prisma.disaggregatedData.deleteMany({ where: { reportId: { in: reportIds } } });
     }
 
-    if (indicatorIds.length > 0) {
-      await prisma.disaggregatedData.deleteMany({
-        where: { indicatorId: { in: indicatorIds } },
-      });
-    }
+    // Delete reports
+    await prisma.report.deleteMany({ where: { projectId: id } });
 
-    if (outcomeIds.length > 0) {
-      await prisma.indicator.deleteMany({
-        where: { outcomeId: { in: outcomeIds } },
-      });
-    }
-
-    if (objectiveIds.length > 0) {
-      await prisma.outcome.deleteMany({
-        where: { objectiveId: { in: objectiveIds } },
-      });
-      await prisma.objective.deleteMany({
-        where: { projectId: id },
-      });
-    }
-
-    if (reportIds.length > 0) {
-      await prisma.report.deleteMany({
-        where: { id: { in: reportIds } },
-      });
-    } else {
-      await prisma.report.deleteMany({
-        where: { projectId: id },
-      });
-    }
-
-    await prisma.project.delete({
-      where: { id },
-    });
+    // Delete project — cascades: ProjectLeadAssignment, ProjectObjective
+    await prisma.project.delete({ where: { id } });
 
     await createAuditLog({
       userId: req.user.id,
       entity: "Project",
       entityId: id,
       action: "DELETE",
-      oldValues: project,
+      oldValues: { id, name: project.name },
       newValues: null,
     });
 

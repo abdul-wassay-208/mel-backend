@@ -62,18 +62,30 @@ model Project {
   lead     User?      @relation("ProjectLead", fields: [leadId], references: [id])
   leads    ProjectLeadAssignment[]
 
-  objectives  Objective[]
+  projectObjectives ProjectObjective[]
   reports     Report[]
   disaggregatedData DisaggregatedData[]
 }
 
 model Objective {
-  id          Int       @id @default(autoincrement())
-  title       String
-  description String?
+  id                Int                @id @default(autoincrement())
+  title             String
+  description       String?
+  projectObjectives ProjectObjective[]
+  outcomes          Outcome[]
+}
+
+model ProjectObjective {
   projectId   Int
-  project     Project   @relation(fields: [projectId], references: [id])
-  outcomes    Outcome[]
+  objectiveId Int
+  assignedAt  DateTime  @default(now())
+
+  project     Project   @relation(fields: [projectId],   references: [id], onDelete: Cascade)
+  objective   Objective @relation(fields: [objectiveId], references: [id], onDelete: Cascade)
+
+  @@id([projectId, objectiveId])
+  @@index([projectId])
+  @@index([objectiveId])
 }
 
 model Outcome {
